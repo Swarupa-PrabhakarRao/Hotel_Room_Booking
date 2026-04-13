@@ -1,10 +1,11 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from pymongo import MongoClient
-from bson.objectid import ObjectId
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
 import os
+import uuid
+import boto3
+from boto3.dynamodb.conditions import Key, Attr
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -20,25 +21,20 @@ def serve_index():
 def serve_file(path):
     return app.send_static_file(path)
 
-# MongoDB Configuration
-mongo_uri = os.getenv('MONGO_URI', 'mongodb://localhost:27017/hotel_db')
-client = MongoClient(mongo_uri)
-db = client.get_default_database(default='hotel_db')
-users_collection = db['users']
-rooms_collection = db['rooms']
-bookings_collection = db['bookings']
+# AWS Configuration
+# boto3 automatically uses ~/.aws/credentials, or IAM Role permissions if on an EC2 instance
+aws_region = os.getenv('AWS_DEFAULT_REGION', 'us-east-1')
+dynamodb = boto3.resource('dynamodb', region_name=aws_region)
+sns_client = boto3.client('sns', region_name=aws_region)
+SNS_TOPIC_ARN = os.getenv('SNS_TOPIC_ARN', '')
 
-# --- HELPER FUNCTIONS ---
-def format_room(room):
-    room['roomId'] = str(room['_id'])
-    del room['_id']
-    return room
-
-def format_booking(booking):
-    booking['bookingId'] = str(booking['_id'])
-    booking['roomId'] = str(booking['roomId'])
-    del booking['_id']
-    return booking
+# DynamoDB Tables (You must create these explicitly in the AWS Console)
+try:
+    users_table = dynamodb.Table('GrandAzure_Users')
+    rooms_table = dynamodb.Table('GrandAzure_Rooms')
+    bookings_table = dynamodb.Table('GrandAzure_Bookings')
+except Exception as e:
+    pass
 
 # --- ROUTES ---
 @app.route('/api/auth/register', methods=['POST'])
@@ -51,16 +47,17 @@ def register():
     if not all([name, email, password]):
         return jsonify({'success': False, 'message': 'Missing required fields'}), 400
         
-    if users_collection.find_one({'email': email}):
+    response = users_table.get_item(Key={'email': email})
+    if 'Item' in response:
         return jsonify({'success': False, 'message': 'Email already registered'}), 400
         
     user_doc = {
+        'email': email, # Partition key
         'name': name,
-        'email': email,
         'password_hash': generate_password_hash(password),
         'role': 'user'
     }
-    users_collection.insert_one(user_doc)
+    users_table.put_item(Item=user_doc)
     return jsonify({'success': True, 'message': 'User registered successfully'})
 
 @app.route('/api/auth/login', methods=['POST'])
@@ -69,7 +66,9 @@ def login():
     email = data.get('email')
     password = data.get('password')
     
-    user = users_collection.find_one({'email': email})
+    response = users_table.get_item(Key={'email': email})
+    user = response.get('Item')
+    
     if user and check_password_hash(user['password_hash'], password):
         return jsonify({
             'success': True, 
@@ -81,89 +80,97 @@ def login():
 @app.route('/api/rooms', methods=['GET', 'POST'])
 def handle_rooms():
     if request.method == 'GET':
-        rooms = list(rooms_collection.find())
-        return jsonify({'success': True, 'data': [format_room(r) for r in rooms]})
+        response = rooms_table.scan()
+        rooms = response.get('Items', [])
+        # convert Decimal to float/int for JSON serialization
+        for r in rooms:
+            if 'price' in r: r['price'] = float(r['price'])
+        # Sort rooms sequentially
+        try:
+            rooms = sorted(rooms, key=lambda x: int(x.get('roomNumber', 0)))
+        except:
+            pass
+        return jsonify({'success': True, 'data': rooms})
         
     elif request.method == 'POST':
-        # Adding a room (admin feature)
         data = request.json
+        # Check if roomNumber exists
+        existing = rooms_table.scan(FilterExpression=Attr('roomNumber').eq(data.get('roomNumber'))).get('Items', [])
+        if existing:
+            return jsonify({'success': False, 'message': 'Room number already exists'}), 400
+            
         new_room = {
+            'roomId': uuid.uuid4().hex, # Partition key
             'roomNumber': data.get('roomNumber'),
             'type': data.get('type'),
-            'price': data.get('price'),
+            'price': int(data.get('price', 0)),
             'isAvailable': data.get('isAvailable', True),
             'description': data.get('description', ''),
             'maxOccupancy': data.get('maxOccupancy', 2)
         }
-        if rooms_collection.find_one({'roomNumber': new_room['roomNumber']}):
-            return jsonify({'success': False, 'message': 'Room number already exists'}), 400
-            
-        rooms_collection.insert_one(new_room)
+        rooms_table.put_item(Item=new_room)
         return jsonify({'success': True, 'message': 'Room added'})
 
 @app.route('/api/rooms/<room_id>', methods=['GET', 'PUT', 'DELETE'])
 def manage_room(room_id):
-    try:
-        obj_id = ObjectId(room_id)
-    except:
-        return jsonify({'success': False, 'message': 'Invalid room ID'}), 400
-
     if request.method == 'GET':
-        room = rooms_collection.find_one({'_id': obj_id})
-        if room:
-            return jsonify({'success': True, 'data': format_room(room)})
+        resp = rooms_table.get_item(Key={'roomId': room_id})
+        if 'Item' in resp:
+            room = resp['Item']
+            if 'price' in room: room['price'] = float(room['price'])
+            return jsonify({'success': True, 'data': room})
         return jsonify({'success': False, 'message': 'Room not found'}), 404
         
     elif request.method == 'PUT':
         data = request.json
-        update_data = {
-            'price': data.get('price'),
-            'isAvailable': data.get('isAvailable'),
-            'description': data.get('description')
+        update_expr = "SET price = :p, isAvailable = :a, description = :d"
+        expr_vals = {
+            ':p': int(data.get('price', 0)),
+            ':a': data.get('isAvailable', True),
+            ':d': data.get('description', '')
         }
-        # filter out None values if they weren't provided
-        update_data = {k:v for k,v in update_data.items() if v is not None}
-        
-        rooms_collection.update_one({'_id': obj_id}, {'$set': update_data})
+        rooms_table.update_item(
+            Key={'roomId': room_id},
+            UpdateExpression=update_expr,
+            ExpressionAttributeValues=expr_vals
+        )
         return jsonify({'success': True, 'message': 'Room updated'})
         
     elif request.method == 'DELETE':
-        rooms_collection.delete_one({'_id': obj_id})
+        rooms_table.delete_item(Key={'roomId': room_id})
         return jsonify({'success': True, 'message': 'Room deleted'})
 
 @app.route('/api/bookings', methods=['GET', 'POST'])
 def handle_bookings():
     if request.method == 'POST':
         data = request.json
-        room_id_str = data.get('roomId')
+        room_id = data.get('roomId')
         user_name = data.get('userName')
         user_email = data.get('userEmail')
         from_date_str = data.get('fromDate')
         to_date_str = data.get('toDate')
         
-        if not all([room_id_str, user_name, user_email, from_date_str, to_date_str]):
+        if not all([room_id, user_name, user_email, from_date_str, to_date_str]):
             return jsonify({'success': False, 'message': 'Missing required fields'}), 400
             
-        try:
-            room_id = ObjectId(room_id_str)
-        except:
-            return jsonify({'success': False, 'message': 'Invalid room ID'}), 400
-            
-        room = rooms_collection.find_one({'_id': room_id})
+        resp = rooms_table.get_item(Key={'roomId': room_id})
+        room = resp.get('Item')
         if not room or not room.get('isAvailable', True):
             return jsonify({'success': False, 'message': 'Room unavailable'}), 400
             
         from_date = datetime.strptime(from_date_str, '%Y-%m-%d')
         to_date = datetime.strptime(to_date_str, '%Y-%m-%d')
-        
         days = (to_date - from_date).days
         if days <= 0: days = 1
-        total_price = room.get('price', 0) * days
+        total_price = int(room.get('price', 0)) * days
         
+        booking_id = uuid.uuid4().hex
         booking_doc = {
+            'bookingId': booking_id, # Partition key
             'roomId': room_id,
             'roomNumber': room.get('roomNumber'),
             'userName': user_name,
+            'guestName': user_name,
             'userEmail': user_email,
             'fromDate': from_date_str,
             'toDate': to_date_str,
@@ -173,57 +180,97 @@ def handle_bookings():
         }
         
         # Mark room as unavailable
-        rooms_collection.update_one({'_id': room_id}, {'$set': {'isAvailable': False}})
-        result = bookings_collection.insert_one(booking_doc)
+        rooms_table.update_item(
+            Key={'roomId': room_id},
+            UpdateExpression="SET isAvailable = :val",
+            ExpressionAttributeValues={':val': False}
+        )
+        bookings_table.put_item(Item=booking_doc)
         
-        return_booking = format_booking(bookings_collection.find_one({'_id': result.inserted_id}))
-        return jsonify({'success': True, 'message': 'Booking confirmed!', 'data': return_booking})
+        # PUBLISH TO AWS SNS MODULE
+        if SNS_TOPIC_ARN:
+            try:
+                sns_client.publish(
+                    TopicArn=SNS_TOPIC_ARN,
+                    Message=f"New Room Booking Processed!\n\nGuest: {user_name} ({user_email})\nSuite: {room.get('roomNumber')}\nCheck In: {from_date_str}\nCheck Out: {to_date_str}\nTotal Cost: ${total_price}"
+                )
+            except Exception as e:
+                print("SNS Error Notification Failed:", e)
+        
+        booking_doc['totalPrice'] = float(booking_doc['totalPrice'])
+        return jsonify({'success': True, 'message': 'Booking confirmed!', 'data': booking_doc})
         
     elif request.method == 'GET':
         email = request.args.get('email')
-        query = {'userEmail': email} if email else {}
-        bookings = list(bookings_collection.find(query))
-        return jsonify({'success': True, 'data': [format_booking(b) for b in bookings]})
+        if email:
+            response = bookings_table.scan(FilterExpression=Attr('userEmail').eq(email))
+        else:
+            response = bookings_table.scan()
+            
+        bookings = response.get('Items', [])
+        for b in bookings:
+            if 'totalPrice' in b: b['totalPrice'] = float(b['totalPrice'])
+        return jsonify({'success': True, 'data': bookings})
 
 @app.route('/api/bookings/<booking_id>', methods=['DELETE'])
 def cancel_booking(booking_id):
-    try:
-        obj_id = ObjectId(booking_id)
-    except:
-        return jsonify({'success': False, 'message': 'Invalid booking ID'}), 400
-        
-    booking = bookings_collection.find_one({'_id': obj_id})
+    resp = bookings_table.get_item(Key={'bookingId': booking_id})
+    booking = resp.get('Item')
+    
     if booking:
-        # Relese room
-        rooms_collection.update_one({'_id': booking['roomId']}, {'$set': {'isAvailable': True}})
-        bookings_collection.update_one({'_id': obj_id}, {'$set': {'status': 'cancelled'}})
+        # Release the room back into availability
+        rooms_table.update_item(
+            Key={'roomId': booking['roomId']},
+            UpdateExpression="SET isAvailable = :val",
+            ExpressionAttributeValues={':val': True}
+        )
+        
+        # Safely update the status using ExpressionAttributeNames since "status" is a reserved keyword in DynamoDB
+        bookings_table.update_item(
+            Key={'bookingId': booking_id},
+            UpdateExpression="SET #s = :val",
+            ExpressionAttributeNames={'#s': 'status'},
+            ExpressionAttributeValues={':val': 'cancelled'}
+        )
+        
+        # OPTIONAL: Send Cancellation SMS via SNS
+        if SNS_TOPIC_ARN:
+            try:
+                sns_client.publish(
+                    TopicArn=SNS_TOPIC_ARN,
+                    Message=f"Booking Cancellation.\n\nSuite {booking.get('roomNumber')} reservation by {booking.get('userEmail')} was just cancelled."
+                )
+            except Exception as e:
+                pass
+
         return jsonify({'success': True, 'message': 'Booking cancelled'})
         
     return jsonify({'success': False, 'message': 'Booking not found'}), 404
 
+
 def seed_db():
-    if rooms_collection.count_documents({}) == 0:
-        print("Seeding MongoDB...")
-        rooms = [
-            {'roomNumber': 101, 'type': 'Single', 'price': 100.0, 'maxOccupancy': 1, 'isAvailable': True, 'description': ''},
-            {'roomNumber': 102, 'type': 'Double', 'price': 150.0, 'maxOccupancy': 2, 'isAvailable': True, 'description': ''},
-            {'roomNumber': 201, 'type': 'Deluxe', 'price': 250.0, 'maxOccupancy': 3, 'isAvailable': True, 'description': ''},
-            {'roomNumber': 301, 'type': 'Suite',  'price': 450.0, 'maxOccupancy': 4, 'isAvailable': True, 'description': 'Luxury suite with ocean view'}
-        ]
-        rooms_collection.insert_many(rooms)
-        
-        if users_collection.count_documents({'email': 'admin@grandazure.com'}) == 0:
-            admin = {
-                'name': 'Admin',
+    try:
+        if not list(rooms_table.scan(Limit=1).get('Items', [])):
+            print("Seeding AWS DynamoDB...")
+            rooms = [
+                {'roomId': uuid.uuid4().hex, 'roomNumber': '101', 'type': 'Single', 'price': 100, 'maxOccupancy': 1, 'isAvailable': True, 'description': ''},
+                {'roomId': uuid.uuid4().hex, 'roomNumber': '102', 'type': 'Double', 'price': 150, 'maxOccupancy': 2, 'isAvailable': True, 'description': ''},
+                {'roomId': uuid.uuid4().hex, 'roomNumber': '201', 'type': 'Deluxe', 'price': 250, 'maxOccupancy': 3, 'isAvailable': True, 'description': ''},
+                {'roomId': uuid.uuid4().hex, 'roomNumber': '301', 'type': 'Suite',  'price': 450, 'maxOccupancy': 4, 'isAvailable': True, 'description': 'Luxury suite with ocean view'}
+            ]
+            for r in rooms: rooms_table.put_item(Item=r)
+            
+            users_table.put_item(Item={
                 'email': 'admin@grandazure.com',
+                'name': 'Admin',
                 'password_hash': generate_password_hash('admin123'),
                 'role': 'admin'
-            }
-            users_collection.insert_one(admin)
-            
-        print("Database seeded!")
+            })
+            print("AWS DynamoDB Database Seeded Successfully!")
+    except Exception as e:
+        print("Could not seed DB. Make sure tables exist in AWS and credentials are valid! Error:", e)
 
 if __name__ == '__main__':
     seed_db()
-    print("🚀 Flask Server with MongoDB running on port 5000")
+    print("🚀 Flask Server linked to AWS DynamoDB & SNS running on port 5000")
     app.run(port=5000, debug=True)

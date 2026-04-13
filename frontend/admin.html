@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grand Azure Hotel — Admin Panel</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+
+<nav class="glass" style="border:none; border-bottom:1px solid rgba(255,255,255,0.05);">
+  <div class="nav-brand">Grand Azure <span>Hotel & Resort</span></div>
+  <ul class="nav-links">
+    <li><a href="index.html">Suites</a></li>
+    <li><a href="booking.html">Reserve</a></li>
+    <li><a href="admin.html" class="active">Admin</a></li>
+  </ul>
+</nav>
+
+<div class="page-header">
+  <h1>Admin Dashboard</h1>
+  <div class="gold-line"></div>
+  <p>Manage rooms and view all bookings</p>
+</div>
+
+<div class="container">
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('bookings', event)">📋 All Bookings</button>
+    <button class="tab-btn" onclick="switchTab('rooms', event)">🛏️ Manage Rooms</button>
+    <button class="tab-btn" onclick="switchTab('add-room', event)">➕ Add New Room</button>
+  </div>
+
+  <!-- TAB 1: Bookings -->
+  <div id="tab-bookings" class="tab-content">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <h2 style="font-size:1.3rem;">All Bookings</h2>
+      <button class="btn btn-sm btn-primary" onclick="loadBookings()">↻ Refresh</button>
+    </div>
+    <div id="bookings-loading" class="loading"><div class="spinner"></div><p>Loading...</p></div>
+    <div class="table-wrapper glass" id="bookings-table" style="display:none;">
+      <table>
+        <thead><tr><th>#</th><th>Suite</th><th>Guest</th><th>Email</th><th>Check-in</th><th>Check-out</th><th>Total</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody id="bookings-body"></tbody>
+      </table>
+    </div>
+    <div id="bookings-empty" style="display:none; text-align:center; padding:40px; color:var(--gray);">No bookings yet.</div>
+  </div>
+
+  <!-- TAB 2: Rooms -->
+  <div id="tab-rooms" class="tab-content" style="display:none;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <h2 style="font-size:1.3rem;">All Rooms</h2>
+      <button class="btn btn-sm btn-primary" onclick="loadRoomsTable()">↻ Refresh</button>
+    </div>
+    <div id="rooms-loading" class="loading"><div class="spinner"></div><p>Loading...</p></div>
+    <div class="table-wrapper" id="rooms-table" style="display:none;">
+      <table>
+        <thead><tr><th>Room No.</th><th>Type</th><th>Price</th><th>Max Guests</th><th>Description</th><th>Available</th><th>Actions</th></tr></thead>
+        <tbody id="rooms-body"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- TAB 3: Add Room -->
+  <div id="tab-add-room" class="tab-content" style="display:none;">
+    <div class="form-card glass" style="max-width:700px; margin:0 auto; text-align:left;">
+      <h2>Add New Room</h2>
+      <div class="form-row">
+        <div class="form-group"><label>Room Number *</label><input type="number" id="new-roomNumber" placeholder="e.g. 305" /></div>
+        <div class="form-group"><label>Room Type *</label>
+          <select id="new-type">
+            <option value="">— Select —</option>
+            <option value="Single">Single</option>
+            <option value="Double">Double</option>
+            <option value="Deluxe">Deluxe</option>
+            <option value="Suite">Suite</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label>Price/Night ($) *</label><input type="number" id="new-price" placeholder="e.g. 150" /></div>
+        <div class="form-group"><label>Max Occupancy *</label><input type="number" id="new-occupancy" placeholder="e.g. 2" /></div>
+      </div>
+      <div class="form-group"><label>Description</label><input type="text" id="new-desc" placeholder="Short description" /></div>
+      <div class="form-group"><label>Availability</label>
+        <select id="new-available"><option value="true">Available</option><option value="false">Not Available</option></select>
+      </div>
+      <button class="btn btn-gold" onclick="addRoom()">Add Room</button>
+      <div id="add-room-result" style="margin-top:12px;"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Edit Modal -->
+<div id="edit-modal" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,30,54,0.7); z-index:200; align-items:center; justify-content:center;">
+  <div style="background:var(--white); border-radius:var(--radius); padding:32px; width:90%; max-width:500px;">
+    <h3 style="font-family:'Playfair Display',serif; margin-bottom:20px;">Edit Room</h3>
+    <input type="hidden" id="edit-id" />
+    <div class="form-group"><label>Price/Night ($)</label><input type="number" id="edit-price" /></div>
+    <div class="form-group"><label>Description</label><input type="text" id="edit-desc" /></div>
+    <div class="form-group"><label>Availability</label>
+      <select id="edit-available"><option value="true">Available</option><option value="false">Not Available</option></select>
+    </div>
+    <div style="display:flex; gap:12px; margin-top:20px;">
+      <button class="btn btn-gold" onclick="saveEdit()">Save</button>
+      <button class="btn btn-sm" style="background:var(--cream);color:var(--navy);" onclick="closeModal()">Cancel</button>
+    </div>
+    <div id="edit-result" style="margin-top:12px;"></div>
+  </div>
+</div>
+
+<script>
+  const API = 'http://localhost:5000/api';
+
+  function switchTab(name, e) {
+    document.querySelectorAll('.tab-content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById(`tab-${name}`).style.display = 'block';
+    e.target.classList.add('active');
+    if (name === 'bookings') loadBookings();
+    if (name === 'rooms') loadRoomsTable();
+  }
+
+  async function loadBookings() {
+    document.getElementById('bookings-loading').style.display = 'block';
+    document.getElementById('bookings-table').style.display = 'none';
+    document.getElementById('bookings-empty').style.display = 'none';
+    try {
+      const res = await fetch(`${API}/bookings`);
+      const data = await res.json();
+      document.getElementById('bookings-loading').style.display = 'none';
+      if (!data.data || data.data.length === 0) { document.getElementById('bookings-empty').style.display = 'block'; return; }
+      document.getElementById('bookings-body').innerHTML = data.data.map((b, i) => `
+        <tr>
+          <td>${i + 1}</td>
+          <td>${b.roomId ? `Room ${b.roomId.roomNumber} (${b.roomId.type})` : 'N/A'}</td>
+          <td>${b.userName}</td>
+          <td style="font-size:0.82rem;">${b.userEmail}</td>
+          <td>${new Date(b.fromDate).toLocaleDateString('en-US',{dateStyle:'medium'})}</td>
+          <td>${new Date(b.toDate).toLocaleDateString('en-US',{dateStyle:'medium'})}</td>
+          <td><strong>$${b.totalPrice}</strong></td>
+          <td><span class="badge badge-${b.status === 'confirmed' ? 'available' : 'unavailable'}">${b.status}</span></td>
+          <td>${b.status === 'confirmed' ? `<button class="btn btn-sm btn-danger" onclick="cancelBooking('${b._id}')">Cancel</button>` : '—'}</td>
+        </tr>`).join('');
+      document.getElementById('bookings-table').style.display = 'block';
+    } catch (err) {
+      document.getElementById('bookings-loading').innerHTML = `<p style="color:var(--danger);">❌ Error loading bookings</p>`;
+    }
+  }
+
+  async function cancelBooking(id) {
+    if (!confirm('Cancel this booking?')) return;
+    const res = await fetch(`${API}/bookings/${id}`, { method: 'DELETE' });
+    const data = await res.json();
+    if (data.success) loadBookings(); else alert(data.message);
+  }
+
+  async function loadRoomsTable() {
+    document.getElementById('rooms-loading').style.display = 'block';
+    document.getElementById('rooms-table').style.display = 'none';
+    try {
+      const res = await fetch(`${API}/rooms`);
+      const data = await res.json();
+      document.getElementById('rooms-loading').style.display = 'none';
+      document.getElementById('rooms-body').innerHTML = data.data.map(room => `
+        <tr>
+          <td><strong>${room.roomNumber}</strong></td>
+          <td><span class="badge badge-${room.type.toLowerCase()}">${room.type}</span></td>
+          <td>$${room.price}</td>
+          <td>${room.maxOccupancy}</td>
+          <td style="font-size:0.83rem; color:var(--text-muted);">${room.description || '—'}</td>
+          <td><span class="badge badge-${room.isAvailable ? 'available' : 'unavailable'}">${room.isAvailable ? 'Yes' : 'No'}</span></td>
+          <td style="display:flex; gap:8px;">
+            <button class="btn btn-sm btn-primary" onclick='openEdit(${JSON.stringify(room)})'>Edit</button>
+            <button class="btn btn-sm btn-danger" onclick="deleteRoom('${room.roomId}')">Delete</button>
+          </td>
+        </tr>`).join('');
+      document.getElementById('rooms-table').style.display = 'block';
+    } catch (err) {
+      document.getElementById('rooms-loading').innerHTML = `<p style="color:var(--danger);">❌ Error</p>`;
+    }
+  }
+
+  async function addRoom() {
+    const roomNumber   = parseInt(document.getElementById('new-roomNumber').value);
+    const type         = document.getElementById('new-type').value;
+    const price        = parseFloat(document.getElementById('new-price').value);
+    const maxOccupancy = parseInt(document.getElementById('new-occupancy').value);
+    const description  = document.getElementById('new-desc').value;
+    const isAvailable  = document.getElementById('new-available').value === 'true';
+    const resultDiv    = document.getElementById('add-room-result');
+    if (!roomNumber || !type || !price || !maxOccupancy) { resultDiv.innerHTML = `<div class="alert alert-error">⚠️ Fill all required fields.</div>`; return; }
+    try {
+      const res = await fetch(`${API}/rooms`, { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({roomNumber,type,price,maxOccupancy,description,isAvailable}) });
+      const data = await res.json();
+      resultDiv.innerHTML = data.success
+        ? `<div class="alert alert-success">✅ Room ${roomNumber} added!</div>`
+        : `<div class="alert alert-error">❌ ${data.message}</div>`;
+    } catch { resultDiv.innerHTML = `<div class="alert alert-error">❌ Server error.</div>`; }
+  }
+
+  function openEdit(room) {
+    document.getElementById('edit-id').value = room.roomId;
+    document.getElementById('edit-price').value = room.price;
+    document.getElementById('edit-desc').value = room.description || '';
+    document.getElementById('edit-available').value = room.isAvailable.toString();
+    document.getElementById('edit-result').innerHTML = '';
+    document.getElementById('edit-modal').style.display = 'flex';
+  }
+  function closeModal() { document.getElementById('edit-modal').style.display = 'none'; }
+
+  async function saveEdit() {
+    const id = document.getElementById('edit-id').value;
+    const price = parseFloat(document.getElementById('edit-price').value);
+    const description = document.getElementById('edit-desc').value;
+    const isAvailable = document.getElementById('edit-available').value === 'true';
+    try {
+      const res = await fetch(`${API}/rooms/${id}`, { method:'PUT', headers:{'Content-Type':'application/json'}, body: JSON.stringify({price,description,isAvailable}) });
+      const data = await res.json();
+      if (data.success) { document.getElementById('edit-result').innerHTML = `<div class="alert alert-success">✅ Updated!</div>`; setTimeout(() => { closeModal(); loadRoomsTable(); }, 1000); }
+      else document.getElementById('edit-result').innerHTML = `<div class="alert alert-error">❌ ${data.message}</div>`;
+    } catch { document.getElementById('edit-result').innerHTML = `<div class="alert alert-error">❌ Error.</div>`; }
+  }
+
+  async function deleteRoom(id) {
+    if (!confirm('Delete this room?')) return;
+    const res = await fetch(`${API}/rooms/${id}`, { method:'DELETE' });
+    const data = await res.json();
+    if (data.success) loadRoomsTable(); else alert(data.message);
+  }
+
+  loadBookings();
+</script>
+</body>
+</html>

@@ -29,13 +29,29 @@
       </div>
 
       <div class="form-group">
+        <label>Phone Number (with +country code)</label>
+        <input type="text" id="reg-phone" placeholder="+1234567890" required />
+      </div>
+
+      <div class="form-group">
         <label>Password</label>
         <input type="password" id="reg-password" placeholder="••••••••" required />
       </div>
 
-      <button class="btn btn-gold" style="width:100%; margin-top:10px" onclick="registerUser()">
-        Register Account
+      <div id="otp-section" style="display:none;">
+        <div class="form-group">
+          <label>Enter OTP</label>
+          <input type="text" id="reg-otp" placeholder="123456" />
+        </div>
+        <button class="btn btn-gold" style="width:100%; margin-top:10px" onclick="registerUser()">
+          Verify & Register
+        </button>
+      </div>
+
+      <button id="send-otp-btn" class="btn btn-gold" style="width:100%; margin-top:10px" onclick="sendOTP()">
+        Send Verification OTP
       </button>
+
       <p style="text-align:center; margin-top:20px; font-size:0.88rem;">
         Already have an account?
         <a href="login.html" style="color:var(--gold); font-weight:bold;">Sign In</a>
@@ -61,19 +77,53 @@
 </div>
 
 <script>
-  // ✅ MATCH backend
   const API = 'http://localhost:5000/api';
+
+  async function sendOTP() {
+    const email = document.getElementById('reg-email').value;
+    const phone = document.getElementById('reg-phone').value;
+    const errDiv = document.getElementById('reg-error');
+    errDiv.textContent = "";
+
+    if (!email || !phone) {
+      errDiv.textContent = '⚠️ Email and Phone Number are required to send OTP.';
+      return;
+    }
+
+    try {
+      const res = await fetch(`${API}/auth/send-otp`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, phone })
+      });
+      const data = await res.json();
+
+      if (data.success) {
+        document.getElementById('otp-section').style.display = 'block';
+        document.getElementById('send-otp-btn').style.display = 'none';
+        errDiv.style.color = 'var(--success)';
+        errDiv.textContent = '✅ OTP sent to your phone!';
+      } else {
+        errDiv.style.color = 'var(--danger)';
+        errDiv.textContent = `❌ ${data.message}`;
+      }
+    } catch (err) {
+      errDiv.style.color = 'var(--danger)';
+      errDiv.textContent = '❌ Error sending OTP.';
+    }
+  }
 
   async function registerUser() {
     const name = document.getElementById('reg-name').value;
     const email = document.getElementById('reg-email').value;
     const password = document.getElementById('reg-password').value;
+    const otp = document.getElementById('reg-otp').value;
     const errDiv = document.getElementById('reg-error');
 
     errDiv.textContent = "";
 
-    if (!name || !email || !password) {
-      errDiv.textContent = '⚠️ Please fill all fields.';
+    if (!otp) {
+      errDiv.textContent = '⚠️ Please enter the OTP.';
       return;
     }
 
@@ -81,7 +131,7 @@
       const res = await fetch(`${API}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name, email, password })
+        body: JSON.stringify({ name, email, password, otp })
       });
 
       const data = await res.json();
@@ -90,11 +140,12 @@
         document.getElementById('signup-form').style.display = 'none';
         document.getElementById('verify-step').style.display = 'block';
       } else {
+        errDiv.style.color = 'var(--danger)';
         errDiv.textContent = `❌ ${data.message}`;
       }
 
     } catch (err) {
-      console.error(err);
+      errDiv.style.color = 'var(--danger)';
       errDiv.textContent = '❌ Server is not running.';
     }
   }

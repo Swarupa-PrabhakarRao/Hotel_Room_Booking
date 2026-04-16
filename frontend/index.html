@@ -2,245 +2,146 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Grand Azure — Home</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
+
 <body>
 
-<nav>
+<nav class="glass">
   <div class="nav-brand">Grand Azure <span>Hotel & Resort</span></div>
-  <ul class="nav-links" id="nav-features" style="display:none;">
-    <li><a href="#" onclick="switchNavTab('rooms')" id="link-rooms" class="active">Rooms</a></li>
+
+  <ul class="nav-links">
+    <li><a onclick="showHome(); setActive(this)" class="active">Home</a></li>
+    <li><a onclick="showRooms(); setActive(this)">Rooms</a></li>
     <li><a href="booking.html">Book a Room</a></li>
-    <li><a href="#" onclick="switchNavTab('cancel')" id="link-cancel">Cancel Booking</a></li>
-    <li><a href="#" onclick="switchNavTab('dash')" id="link-dash">Dashboard</a></li>
-    <li id="admin-link" style="display:none;"><a href="admin.html" class="gold-text">Admin Dashboard</a></li>
-    <li class="profile-dropdown-container">
-      <div class="profile-circle" id="user-initial" style="cursor:pointer;" onclick="toggleProfile()">C</div>
-      <div id="profileDropdown" class="profile-dropdown glass">
-        <div>
-          <div class="profile-name" id="dd-name">Chinnu</div>
-          <div class="profile-email" id="dd-email">chinnu@email.com</div>
-        </div>
-        <button onclick="logout()" class="btn" style="background:rgba(255,75,75,0.1); color:var(--danger); border:1px solid rgba(255,75,75,0.3); width:100%; padding:8px; font-size:0.85rem;">Sign Out</button>
+    <li><a onclick="showDashboard(); setActive(this)">Dashboard</a></li>
+    <li><a onclick="showCancel(); setActive(this)">Cancel Booking</a></li>
+    <li style="position:relative;">
+      <div class="profile-circle" id="profileCircle" style="cursor:pointer;" onclick="toggleProfileDropdown()">U</div>
+      <div id="profileDropdown" class="glass" style="display:none; position:absolute; right:0; top:50px; width:220px; padding:15px; border-radius:8px; z-index:100; box-shadow: 0 4px 15px rgba(0,0,0,0.5);">
+        <p style="margin:0 0 5px 0; font-weight:bold;" id="dropName"></p>
+        <p style="margin:0 0 15px 0; font-size:0.85rem; color:var(--text-muted);" id="dropEmail"></p>
+        <button class="btn btn-sm btn-danger" style="width:100%" onclick="logout()">Log Out</button>
       </div>
     </li>
   </ul>
 </nav>
 
-<div id="landing-desc" class="page-header" style="height:80vh; display:flex; flex-direction:column; justify-content:center;">
-  <h1>Refined Luxury, Rediscovered.</h1>
-  <p style="max-width:700px; margin:20px auto;">Experience the fusion of classic elegance and modern comfort. Sign in to explore our collections.</p>
-  <div style="margin-top:30px;">
-    <a href="login.html" class="btn btn-gold" style="width:200px;">Login to Explore</a>
-  </div>
-</div>
+<div class="container">
+  <h1 id="welcomeText"></h1>
 
-<div id="main-dashboard" class="container" style="display:none;">
-  <div class="page-header" style="background:none; text-align:left; padding:0; margin-bottom: 40px;">
-    <h1 id="welcome-msg" style="background:none; -webkit-text-fill-color: var(--gold); text-shadow:none;">Welcome Back</h1>
-    <div style="width: 50px; height: 3px; background: var(--gold); margin: 15px 0;"></div>
-  </div>
-
-  <div id="tab-rooms" class="nav-tab-content">
-    <h2 style="font-size:1.5rem; margin-bottom:20px;">Available Collections</h2>
-    <div class="category-filter-bar">
-      <button class="cat-btn active" onclick="filterByCat('All')">All Categories</button>
-      <button class="cat-btn" onclick="filterByCat('Single')">Single</button>
-      <button class="cat-btn" onclick="filterByCat('Double')">Double</button>
-      <button class="cat-btn" onclick="filterByCat('Deluxe')">Deluxe</button>
-      <button class="cat-btn" onclick="filterByCat('Suite')">Suites</button>
+  <!-- SECTIONS -->
+  <div id="home-section">
+    <div id="home-desc" class="glass" style="padding: 20px; margin-top: 20px; margin-bottom: 20px; border-left: 4px solid var(--gold);">
+      <h2 style="margin-bottom:10px;">About Grand Azure</h2>
+      <p style="color:var(--text-muted); font-size:1.1rem; line-height:1.6;">
+        Welcome to Grand Azure, the most luxurious hotel and resort. Enjoy our premium amenities, beautiful ocean views, and exceptional 24/7 room service. 
+        From a cozy single room to a grand duplex suite, we offer exactly what you need for an unforgettable stay. Unwind at our award-winning spa, dine at our Michelin-starred restaurant, and let us take care of your every need.
+      </p>
     </div>
     
-    <div id="loading" class="loading"><div class="spinner"></div><p>Gathering available suites...</p></div>
+    <marquee class="glass" style="padding: 10px; color: var(--gold); font-weight: bold; border-radius: 4px; margin-bottom:20px;">
+      🎉 Special Deal: Grab our Weekly Discounts with 20% OFF on all Deluxe rooms! 🌊 Book a Suite this weekend and get a complimentary SPA session! 🍽️ Free breakfast included with every stay!
+    </marquee>
+  </div>
+
+  <div id="rooms-section" style="display:none;">
+    <!-- FILTER -->
+    <div class="category-filter-bar">
+      <button class="cat-btn active" onclick="filterRooms('All', this)">All</button>
+      <button class="cat-btn" onclick="filterRooms('Single', this)">Single</button>
+      <button class="cat-btn" onclick="filterRooms('Double', this)">Double</button>
+      <button class="cat-btn" onclick="filterRooms('Deluxe', this)">Deluxe</button>
+      <button class="cat-btn" onclick="filterRooms('Suite', this)">Suite</button>
+    </div>
     <div class="room-grid" id="rooms-grid"></div>
   </div>
+  <div id="dashboard-section" style="display:none;"></div>
+  <div id="cancel-section" style="display:none;"></div>
 
-  <div id="tab-cancel" class="nav-tab-content" style="display:none;">
-    <h2 style="font-size:1.5rem; margin-bottom:20px;">Manage Reservations</h2>
-    <p style="color:var(--text-muted); margin-bottom:20px;">Review your upcoming suite reservations and optionally cancel them below.</p>
-    <div id="cancel-bookings-list"></div>
-  </div>
-
-  <div id="tab-dash" class="nav-tab-content" style="display:none;">
-    <h2 style="font-size:1.5rem; margin-bottom:20px;">My Dashboard</h2>
-    <div class="dashboard-metrics">
-      <div class="metric-box">
-        <h3 id="dash-total">0</h3>
-        <p>Total Bookings</p>
-      </div>
-      <div class="metric-box" style="background:rgba(46,204,113,0.05); border-color:rgba(46,204,113,0.2);">
-        <h3 id="dash-active" style="color:var(--success);">0</h3>
-        <p>Active Rooms</p>
-      </div>
-      <div class="metric-box" style="background:rgba(255,75,75,0.05); border-color:rgba(255,75,75,0.2);">
-        <h3 id="dash-cancelled" style="color:var(--danger);">0</h3>
-        <p>Cancelled Rooms</p>
-      </div>
-    </div>
-    <div id="dashboard-bookings-list"></div>
-  </div>
 </div>
 
 <script>
-  const API = 'http://localhost:5000'; // Replace with your EC2 Public IP
-  let allRooms = [];
+// ✅ VERIFY LOGIN INITIALLY
+if (!localStorage.getItem('isLoggedIn') || localStorage.getItem('isLoggedIn') !== 'true') {
+  window.location.href = 'login.html';
+}
 
-  function initPage() {
-    const isLoggedIn = localStorage.getItem('isLoggedIn');
-    const role = localStorage.getItem('userRole');
-    const name = localStorage.getItem('userName');
-    const email = localStorage.getItem('userEmail'); // Ensure this is stored during login!
+const API = 'http://localhost:5000/api';
+let allRooms = [];
 
-    if (isLoggedIn === 'true') {
-      document.getElementById('landing-desc').style.display = 'none';
-      document.getElementById('nav-features').style.display = 'flex';
-      document.getElementById('main-dashboard').style.display = 'block';
-      document.getElementById('welcome-msg').textContent = `Welcome Back, ${name.split(' ')[0]}`;
-      document.getElementById('user-initial').textContent = name.charAt(0).toUpperCase();
+const name = localStorage.getItem("userName") || "Guest";
+const userRole = localStorage.getItem("userRole") || "user";
+const userEmail = localStorage.getItem("userEmail") || "";
 
-      // Populate Dropdown
-      document.getElementById('dd-name').textContent = name;
-      document.getElementById('dd-email').textContent = email || 'User Email';
+document.getElementById("welcomeText").innerText = `Welcome Back, ${name}`;
+document.getElementById("profileCircle").innerText = name[0];
+document.getElementById("dropName").innerText = name;
+document.getElementById("dropEmail").innerText = userEmail;
 
-      // Handle Role-Based Access
-      if (role === 'admin') {
-        document.getElementById('admin-link').style.display = 'block';
-      }
+// Handle Admin Nav Visibility
+if (userRole !== 'admin') {
+  // adminLink was removed from html so nothing to do here
+}
 
-      fetchRooms();
-      fetchUserBookings(email);
-    }
+function toggleProfileDropdown() {
+  const drop = document.getElementById("profileDropdown");
+  drop.style.display = drop.style.display === "none" ? "block" : "none";
+}
+
+// Close dropdown if clicked outside
+document.addEventListener('click', function(event) {
+  const circle = document.getElementById('profileCircle');
+  const drop = document.getElementById('profileDropdown');
+  if (!circle.contains(event.target) && !drop.contains(event.target)) {
+    drop.style.display = 'none';
   }
+});
 
-  function toggleProfile() {
-    document.getElementById('profileDropdown').classList.toggle('show');
-  }
+function logout() {
+  localStorage.clear();
+  window.location.href = 'login.html';
+}
 
-  // Close dropdown if clicked outside
-  window.onclick = function(event) {
-    if (!event.target.matches('.profile-circle') && !event.target.closest('.profile-dropdown')) {
-      const dropdowns = document.getElementsByClassName("profile-dropdown");
-      for (let i = 0; i < dropdowns.length; i++) {
-        if (dropdowns[i].classList.contains('show')) {
-          dropdowns[i].classList.remove('show');
-        }
-      }
-    }
-  }
+// 🔥 ACTIVE NAV
+function setActive(el) {
+  document.querySelectorAll('.nav-links a').forEach(a => a.classList.remove('active'));
+  el.classList.add('active');
+}
 
-  function switchNavTab(tab) {
-    document.getElementById('tab-rooms').style.display = 'none';
-    document.getElementById('tab-cancel').style.display = 'none';
-    document.getElementById('tab-dash').style.display = 'none';
+// 🔥 SECTION CONTROL
+function showSection(section) {
+  document.getElementById("home-section").style.display = "none";
+  document.getElementById("rooms-section").style.display = "none";
+  document.getElementById("dashboard-section").style.display = "none";
+  document.getElementById("cancel-section").style.display = "none";
 
-    document.getElementById('link-rooms').classList.remove('active');
-    document.getElementById('link-cancel').classList.remove('active');
-    document.getElementById('link-dash').classList.remove('active');
+  document.getElementById(section).style.display = "block";
+}
 
-    document.getElementById('tab-' + tab).style.display = 'block';
-    document.getElementById('link-' + tab).classList.add('active');
-  }
+function showHome() {
+  showSection("home-section");
+}
 
-  async function fetchUserBookings(email) {
-    if (!email) return;
-    try {
-      const res = await fetch(`${API}/api/bookings?email=${encodeURIComponent(email)}`);
-      const data = await res.json();
-      if (data.success) {
-        const bookings = data.data;
-        const activeBookings = bookings.filter(b => b.status === 'confirmed');
-        const cancelledBookings = bookings.filter(b => b.status === 'cancelled');
+// 🔥 LOAD ROOMS
+async function loadRooms() {
+  const res = await fetch(`${API}/rooms`);
+  const data = await res.json();
+  allRooms = data.data;
+  displayRooms(allRooms);
+}
 
-        document.getElementById('dash-total').textContent = bookings.length;
-        document.getElementById('dash-active').textContent = activeBookings.length;
-        document.getElementById('dash-cancelled').textContent = cancelledBookings.length;
-        
-        renderDashboardBookings(bookings, activeBookings);
-      }
-    } catch (err) {
-      console.error("Error fetching user bookings");
-    }
-  }
+// 🔥 DISPLAY ROOMS
+function displayRooms(rooms) {
+  const container = document.getElementById("rooms-grid");
+  showSection("rooms-section");
 
-  function renderDashboardBookings(allBookings, activeBookings) {
-    const dashList = document.getElementById('dashboard-bookings-list');
-    const cancelList = document.getElementById('cancel-bookings-list');
-    
-    // DASHBOARD TAB (Analytics and Static Logs - ALL Bookings)
-    if (allBookings.length === 0) {
-      dashList.innerHTML = `<p style="color:var(--text-muted); font-size:0.9rem;">You have not made any suite reservations.</p>`;
-    } else {
-      dashList.innerHTML = allBookings.map(b => {
-        let badgeStyle = b.status === 'confirmed' 
-          ? 'color:var(--success); background:rgba(46,204,113,0.1);' 
-          : 'color:var(--danger); background:rgba(255,75,75,0.1);';
-        return `
-        <div class="booking-mini-card glass" style="margin-bottom: 20px;">
-          <div class="booking-info">
-            <h4>Suite <span>${b.roomNumber}</span> <span style="font-size:0.75rem; ${badgeStyle} padding:3px 8px; border-radius:12px; margin-left:10px;">${b.status}</span></h4>
-            <p style="margin-top:5px;"><strong>Check-in:</strong> ${b.fromDate} &nbsp;|&nbsp; <strong>Check-out:</strong> ${b.toDate}</p>
-            <p style="margin-top:2px;"><strong>Guest Log:</strong> ${b.guestName} (${b.userEmail})</p>
-          </div>
-          <div class="booking-price">
-            <span style="font-size:0.8rem; display:block; color:var(--text-muted);">Total Cost</span>
-            $${b.totalPrice}
-          </div>
-        </div>
-      `}).join('');
-    }
+  container.innerHTML = "";
 
-    // CANCEL BOOKING TAB (Only ACTIVE Bookings)
-    if (activeBookings.length === 0) {
-      cancelList.innerHTML = `<p style="color:var(--text-muted); font-size:0.9rem;">You have no active suite reservations to cancel.</p>`;
-    } else {
-      cancelList.innerHTML = activeBookings.map(b => `
-        <div class="booking-mini-card glass">
-          <div class="booking-info">
-            <h4>Suite <span>${b.roomNumber}</span></h4>
-            <p>Check-in: ${b.fromDate} &nbsp;|&nbsp; Check-out: ${b.toDate}</p>
-            <div style="margin-top:10px;">
-              <button class="btn btn-sm" style="background:rgba(255,75,75,0.1); color:var(--danger); border:1px solid rgba(255,75,75,0.3); padding:6px 16px; font-size:0.8rem" onclick="cancelBooking('${b.bookingId}')">Cancel Reservation</button>
-            </div>
-          </div>
-        </div>
-      `).join('');
-    }
-  }
-
-  async function cancelBooking(bookingId) {
-    if(!confirm('Are you sure you want to cancel this reservation?')) return;
-    try {
-      const res = await fetch(`${API}/api/bookings/${bookingId}`, { method: 'DELETE' });
-      const data = await res.json();
-      if(data.success) {
-        // Refresh dashboard and available rooms
-        fetchUserBookings(localStorage.getItem('userEmail'));
-        fetchRooms();
-      } else {
-        alert(data.message);
-      }
-    } catch(err) {
-      alert("Network Error");
-    }
-  }
-
-  async function fetchRooms() {
-    try {
-      const res = await fetch(`${API}/api/rooms`);
-      const data = await res.json();
-      allRooms = data.data;
-      document.getElementById('loading').style.display = 'none';
-      renderRooms(allRooms);
-    } catch (err) {
-      document.getElementById('loading').innerHTML = "❌ Connection Error.";
-    }
-  }
-
-  function renderRooms(rooms) {
-    const grid = document.getElementById('rooms-grid');
-    grid.innerHTML = rooms.map(room => `
+  rooms.forEach(room => {
+    container.innerHTML += `
       <div class="room-card glass">
         <div class="room-card-header">
           <div class="room-number">${room.roomNumber}</div>
@@ -248,30 +149,117 @@
             ${room.isAvailable ? 'Available' : 'Booked'}
           </span>
         </div>
+
         <div class="room-card-body">
-          <div class="room-type">${room.type} Suite</div>
-          <div class="room-price">$${room.price} <span>/ night</span></div>
-          <button class="btn btn-gold" style="width:100%" onclick="window.location.href='booking.html?roomId=${room.roomId}'" ${!room.isAvailable ? 'disabled' : ''}>
-            Reserve Suite
+          <div class="room-type">${room.type}</div>
+          <div class="room-price">$${room.price} <span>/night</span></div>
+
+          <button class="btn btn-gold"
+            onclick="goToBooking('${room.roomId}')"
+            ${!room.isAvailable ? 'disabled' : ''}>
+            Book Now
           </button>
         </div>
       </div>
-    `).join('');
+    `;
+  });
+}
+
+// 🔥 FILTER
+function filterRooms(type, btn) {
+  document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+
+  if (type === "All") displayRooms(allRooms);
+  else displayRooms(allRooms.filter(r => r.type === type));
+}
+
+// 🔥 SHOW ROOMS
+function showRooms() {
+  displayRooms(allRooms);
+}
+
+// 🔥 BOOK
+function goToBooking(roomId) {
+  window.location.href = `booking.html?roomId=${roomId}`;
+}
+
+// ================= DASHBOARD =================
+async function showDashboard() {
+  const res = await fetch(`${API}/bookings`);
+  const data = await res.json();
+
+  const userEmail = localStorage.getItem("userEmail");
+
+  const userBookings = data.data.filter(b => b.userEmail === userEmail);
+
+  let total = userBookings.length;
+  let cancelled = userBookings.filter(b => b.status === "cancelled").length;
+  let active = userBookings.filter(b => b.status === "confirmed").length;
+
+  const container = document.getElementById("dashboard-section");
+  showSection("dashboard-section");
+
+  container.innerHTML = `
+    <div class="glass" style="padding:20px; margin-top:20px;">
+      <h2>📊 Your Dashboard</h2>
+      <p>Total Bookings: <strong>${total}</strong></p>
+      <p>Active Bookings: <strong>${active}</strong></p>
+      <p>Cancelled Bookings: <strong>${cancelled}</strong></p>
+    </div>
+  `;
+}
+
+// ================= CANCEL =================
+async function showCancel() {
+  const res = await fetch(`${API}/bookings`);
+  const data = await res.json();
+
+  const userEmail = localStorage.getItem("userEmail");
+
+  const userBookings = data.data.filter(
+    b => b.userEmail === userEmail && b.status === "confirmed"
+  );
+
+  const container = document.getElementById("cancel-section");
+  showSection("cancel-section");
+
+  let html = `<div class="glass" style="padding:20px; margin-top:20px;">
+                <h2>❌ Cancel Your Booking</h2>`;
+
+  if (userBookings.length === 0) {
+    html += "<p>No active bookings</p>";
   }
 
-  function filterByCat(cat) {
-    document.querySelectorAll('.cat-btn').forEach(b => b.classList.remove('active'));
-    event.target.classList.add('active');
-    const filtered = (cat === 'All') ? allRooms : allRooms.filter(r => r.type === cat);
-    renderRooms(filtered);
-  }
+  userBookings.forEach(b => {
+    html += `
+      <div style="margin:10px 0; padding:10px; border:1px solid gray;">
+        <p>Room ${b.roomNumber}</p>
+        <p>${b.fromDate} → ${b.toDate}</p>
+        <button onclick="cancelBooking('${b.bookingId}')">Cancel</button>
+      </div>
+    `;
+  });
 
-  function logout() {
-    localStorage.clear();
-    window.location.href = 'index.html';
-  }
+  html += `</div>`;
 
-  initPage();
+  container.innerHTML = html;
+}
+
+// 🔥 CANCEL FUNCTION
+async function cancelBooking(id) {
+  await fetch(`${API}/bookings/${id}`, {
+    method: "DELETE"
+  });
+
+  alert("Booking cancelled!");
+  showCancel();
+}
+
+// INIT
+loadRooms();
+showSection("home-section");
 </script>
+
 </body>
 </html>
